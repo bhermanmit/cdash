@@ -7,6 +7,9 @@ import sys
 import shutil
 from subprocess import call 
 from collections import OrderedDict
+from optparse import OptionParser
+from glob import glob
+from copy import copy
 
 # Compiler paths
 FC_DEFAULT='gfortran'
@@ -15,12 +18,21 @@ HDF5_DIR='/opt/hdf5/1.8.12-gnu'
 PHDF5_DIR='/opt/phdf5/1.8.12-gnu'
 PETSC_DIR='/opt/petsc/3.4.3-gnu'
 
+# Command line parsing
+parser = OptionParser()
+parser.add_option("-b", "--branch", dest="branch",
+                  help="branch name for build")
+parser.add_option("-D", "--dashboard", dest="dash", 
+                  help="Dash name -- Experimental, Nightly, Continuous")
+(options, args) = parser.parse_args()
+
 # Define test data structure
 tests = OrderedDict()
 
 class Test(object):
-    def __init__(self, debug=False, optimize=False, mpi=False, openmp=False,
+    def __init__(self, name=None, debug=False, optimize=False, mpi=False, openmp=False,
                  hdf5=False, petsc=False):
+        self.name = name
         self.debug = debug
         self.optimize = optimize
         self.mpi = mpi
@@ -29,7 +41,6 @@ class Test(object):
         self.petsc = petsc
         self.success = True
         self.msg = None
-        self.setup_cmake()
 
     def setup_cmake(self):
         # Default cmake
@@ -58,6 +69,16 @@ class Test(object):
         if self.mpi:
             os.environ['MPI_DIR'] = MPI_DIR
 
+        # Set up ctests
+        self.ctest = ['ctest']
+        if options.branch != None:
+            os.environ['BUILDNAME'] = options.branch+'_'+self.name
+        else:
+            os.environ['BUILDNAME'] = self.name
+        if options.dash != None:
+            self.ctest.append('-D')
+            self.ctest.append(options.dash)
+
     def run_cmake(self):
         os.environ['FC'] = self.fc
         rc = call(self.cmake)
@@ -68,22 +89,70 @@ class Test(object):
     def run_make(self):
         if not self.success:
             return
-        rc = call(['make','-j', '-s','-C','build'])
+        rc = call(['make','-j', '-s'])
         if rc != 0:
             self.success = False
-            self.msg = 'Failed on make.'
+            self.msg = 'Failed on build.'
 
     def run_ctests(self):
         if not self.success:
             return
-        rc = call(['make','test','-C','build'])
+        rc = call(self.ctest)
         if rc != 0:
+            print('RETURN CODE:', rc)
             self.success = False
             self.msg = 'Failed on testing.'
 
+    def run_ctests_cdash(self):
+
+        # Starting
+        ctest_start = copy(self.ctest)
+        ctest_start[-1] = ctest_start[-1]+'Start'
+        rc = call(ctest_start)
+        if rc != 0:
+            print('RETURN CODE:', rc)
+            self.success = False
+            self.msg = 'Failed on starting.'
+
+        # Configuring
+        ctest_conf = copy(self.ctest)
+        ctest_conf[-1] = ctest_conf[-1]+'Configure'
+        rc = call(ctest_conf)
+        if rc != 0:
+            print('RETURN CODE:', rc)
+            self.success = False
+            self.msg = 'Failed on configuring.'
+
+        # Building
+        ctest_build = copy(self.ctest)
+        ctest_build[-1] = ctest_build[-1]+'Build'
+        rc = call(ctest_build)
+        if rc != 0:
+            print('RETURN CODE:', rc)
+            self.success = False
+            self.msg = 'Failed on building.'
+
+        # Testing
+        ctest_test = copy(self.ctest)
+        ctest_test[-1] = ctest_test[-1]+'Test'
+        rc = call(ctest_test)
+        if rc != 0:
+            print('RETURN CODE:', rc)
+            self.success = False
+            self.msg = 'Failed on testing.'
+
+        # Submission
+        ctest_submit = copy(self.ctest)
+        ctest_submit[-1] = ctest_submit[-1]+'Submit'
+        rc = call(ctest_submit)
+        if rc != 0:
+            print('RETURN CODE:', rc)
+            self.success = False
+            self.msg = 'Failed on submission.'
+
 def add_test(name, debug=False, optimize=False, mpi=False, openmp=False,\
              hdf5=False, petsc=False):
-    tests.update({name:Test(debug, optimize, mpi, openmp, hdf5, petsc)})
+    tests.update({name:Test(name, debug, optimize, mpi, openmp, hdf5, petsc)})
 
 # List of tests
 add_test('basic-normal')
@@ -121,7 +190,8 @@ add_test('omp-phdf5-petsc-debug', openmp=True, mpi=True, hdf5=True, petsc=True, 
 add_test('omp-phdf5-petsc-optimize', openmp=True, mpi=True, hdf5=True, petsc=True, optimize=True)
 
 # Process command line arguments
-if len(sys.argv) > 1:
+if False:
+#if len(sys.argv) > 1:
     flags = [i for i in sys.argv[1:] if i.startswith('-')]
     tests_ = [i for i in sys.argv[1:] if not i.startswith('-')]
 
@@ -161,20 +231,29 @@ for test in iter(tests):
     print(test + ' tests')
     print('-'*(len(test) + 6))
 
+    # Set up this test
+    tests[test].setup_cmake()
 
     # Run CMAKE to configure build
     tests[test].run_cmake()
 
-    # Build OpenMC
-    tests[test].run_make()
+    # Go into build directory
+    os.chdir('build')
 
-    # Run tests
-    tests[test].run_ctests()
+    # Build and TestOpenMC if dashboard is not active
+    if options.dash == None:
+        tests[test].run_make()
+        tests[test].run_ctests()
+    else:
+        tests[test].run_ctests_cdash()
 
     # Copy test log file if failed
     if tests[test].msg == 'Failed on testing.':
-        shutil.copy('build/Testing/Temporary/LastTest.log',
-                    'LastTest_{0}.log'.format(test))
+        logfile = glob('Testing/Temporary/LastTest*')
+        shutil.copy(logfile[0], '../LastTest_{0}.log'.format(test))
+
+    # Leave build directory
+    os.chdir('..')
 
     # Clean up build
     call(['rm','-rf','build'])

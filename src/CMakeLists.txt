@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 project(openmc Fortran)
+set(BUILD_NAME "basic_build")
 
 # Setup output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -225,8 +226,10 @@ endif()
 # This allows mpi test to work
 enable_testing()
 
+if (NOT $ENV{MEM_CHECKK})
+
 # Get a list of all the tests to run
-file(GLOB_RECURSE TESTS ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_*.py)
+file(GLOB_RECURSE TESTS ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_basic.py)
 
 # Check to see if PETSC is compiled for CMFD tests
 if (NOT ${PETSC_ENABLED})
@@ -260,5 +263,13 @@ foreach(test ${TESTS})
       COMMAND ${PYTHON_EXECUTABLE} ${TEST_NAME} --exe $<TARGET_FILE:openmc>)
 
   endif(${MPI_ENABLED})
-
 endforeach(test)
+
+else(NOT $ENV{MEM_CHECKK})
+message('HELLO')
+  add_test(NAME test_basic 
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../tests/test_basic
+    COMMAND $<TARGET_FILE:openmc>)
+
+endif(NOT $ENV{MEM_CHECKK})
+
