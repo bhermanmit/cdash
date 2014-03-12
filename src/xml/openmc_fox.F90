@@ -22,7 +22,13 @@ module openmc_fox
     INDEX_SIZE_ERR, FoX_NO_SUCH_ENTITY, FoX_HIERARCHY_REQUEST_ERR, &
     FoX_INVALID_URI
 
+  use m_dom_dom
+  use fox_dom
+  use fox_m_fsys_count_parse_input, only: countrts
+
   implicit none
+
+  contains
 
   function getChildrenByTagName(doc, tagName, name, ex)result(list) 
     type(DOMException), intent(out), optional :: ex

@@ -172,7 +172,7 @@ endif()
 # FoX Fortran XML Library
 #===============================================================================
 
-file(GLOB_RECURSE source_fox xml/*.F90)
+file(GLOB_RECURSE source_fox xml/*.F90 xml/*.f90)
 add_library(fox STATIC ${source_fox})
 
 #===============================================================================
