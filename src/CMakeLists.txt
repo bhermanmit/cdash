@@ -174,6 +174,12 @@ endif()
 
 file(GLOB_RECURSE source_fox xml/*.F90 xml/*.f90)
 add_library(fox STATIC ${source_fox})
+add_custom_target(fox_submodule
+                  COMMAND git submodule init
+                  COMMAND git submodule update
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+                  COMMENT "Initializes/fetches FoX XML submodule")
+add_dependencies(fox fox_submodule)
 
 #===============================================================================
 # Build OpenMC executable
